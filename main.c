@@ -1742,10 +1742,42 @@ static void frame_flags(void *data, struct zwlr_screencopy_frame_v1 *frame,
     (void)data; (void)frame; (void)flags;
 }
 
+/* Normalize the just-captured buffer to XRGB/ARGB byte order in place,
+ * if the compositor handed us a BGR-variant format instead. Done once
+ * here rather than per-pixel in sample_capture/capture_as_cairo_surface,
+ * since the latter is called on every redraw (every pointer motion) and
+ * would otherwise re-swap the whole screen's worth of pixels every
+ * frame for no reason - normalizing once up front lets the rest of the
+ * code (and cairo, which has no native BGR format) just always assume
+ * RGB byte order from here on. */
+static void normalize_capture_to_rgb_order(void)
+{
+    if (!A.capture) return;
+    if (A.capture_format != WL_SHM_FORMAT_XBGR8888 &&
+        A.capture_format != WL_SHM_FORMAT_ABGR8888) {
+        return; /* already RGB-ordered (or an unexpected format we leave alone) */
+    }
+
+    uint8_t *base = (uint8_t *)A.capture->data;
+    for (int y = 0; y < A.capture->height; y++) {
+        uint8_t *row = base + (size_t)y * A.capture->stride;
+        for (int x = 0; x < A.capture->width; x++) {
+            uint8_t *px = row + (size_t)x * 4;
+            uint8_t tmp = px[0]; /* R <-> B */
+            px[0] = px[2];
+            px[2] = tmp;
+        }
+    }
+
+    A.capture_format = (A.capture_format == WL_SHM_FORMAT_ABGR8888)
+                        ? WL_SHM_FORMAT_ARGB8888 : WL_SHM_FORMAT_XRGB8888;
+}
+
 static void frame_ready(void *data, struct zwlr_screencopy_frame_v1 *frame,
                          uint32_t tv_sec_hi, uint32_t tv_sec_lo, uint32_t tv_nsec)
 {
     (void)data; (void)tv_sec_hi; (void)tv_sec_lo; (void)tv_nsec;
+    normalize_capture_to_rgb_order();
     A.capture_ready = true;
     zwlr_screencopy_frame_v1_destroy(frame);
 }
@@ -1784,11 +1816,16 @@ static void place_panel(int mx, int my, int sw, int sh,
     if (*out_y + win_h > sh) *out_y = sh - win_h;
 }
 
-/* Read one pixel from the frozen capture buffer. The wl_shm formats we
- * care about (ARGB8888/XRGB8888) are both 32bpp little-endian with the
- * same byte layout cairo uses for CAIRO_FORMAT_ARGB32, so this is a
- * direct memory read - no XGetPixel-style mask shifting needed beyond
- * picking the bytes apart. */
+/* Read one pixel from the frozen capture buffer.
+ *
+ * Safe to assume XRGB/ARGB byte order unconditionally here: whatever
+ * format the compositor actually handed back in frame_buffer(), it's
+ * already been normalized to RGB order in-place by
+ * normalize_capture_to_rgb_order() before A.capture_ready was set, so
+ * this never runs against raw BGR data. (See that function's comment
+ * for why the original version of this code - which assumed RGB order
+ * without checking - produced a colour tint on compositors that hand
+ * back XBGR8888/ABGR8888.) */
 static void sample_capture(int x, int y, int *r, int *g, int *b)
 {
     if (!A.capture || x < 0 || y < 0 || x >= A.capture->width || y >= A.capture->height) {
@@ -1798,7 +1835,6 @@ static void sample_capture(int x, int y, int *r, int *g, int *b)
     uint8_t *row = (uint8_t *)A.capture->data + (size_t)y * A.capture->stride;
     uint32_t px;
     memcpy(&px, row + (size_t)x * 4, 4);
-    /* both ARGB8888 and XRGB8888: byte order B,G,R,X in memory on LE */
     *b = (px >>  0) & 0xff;
     *g = (px >>  8) & 0xff;
     *r = (px >> 16) & 0xff;
@@ -1807,8 +1843,13 @@ static void sample_capture(int x, int y, int *r, int *g, int *b)
 static cairo_surface_t *capture_as_cairo_surface(void)
 {
     if (!A.capture) return NULL;
-    /* Wrap the existing capture buffer directly - no copy needed since
-     * cairo's ARGB32/RGB24 layouts match wl_shm's ARGB8888/XRGB8888. */
+    /* Safe to wrap the buffer directly with no copy: by this point
+     * A.capture_format has been normalized (in frame_ready, via
+     * normalize_capture_to_rgb_order) to always be either ARGB8888 or
+     * XRGB8888, both of which match cairo's ARGB32/RGB24 byte layout
+     * exactly. Cairo has no native format for the BGR variants the
+     * compositor may have originally handed back, which is why that
+     * normalization step exists rather than branching here. */
     cairo_format_t fmt = (A.capture_format == WL_SHM_FORMAT_ARGB8888)
                           ? CAIRO_FORMAT_ARGB32 : CAIRO_FORMAT_RGB24;
     return cairo_image_surface_create_for_data(

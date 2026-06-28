@@ -1,6 +1,6 @@
-# px (Wayland port) — single-file build
+# pw
 
-Wayland port of the X11 `px` color picker. **Requires a wlroots-based
+Wayland port of the X11 `pw` color picker. **Requires a wlroots-based
 compositor** (Sway, Hyprland, river, etc.) — it uses `wlr-layer-shell-unstable-v1`
 and `wlr-screencopy-unstable-v1`, wlroots extensions not present on
 GNOME/KDE's portal stack.
@@ -16,14 +16,8 @@ notices intact. There is no `generated/` folder to find missing, and no
 scanner step — just:
 
 ```sh
-gcc main.c -lwayland-client -lcairo -lxkbcommon -lrt -o px
-```
-
-or, using the included Makefile:
-
-```sh
 make
-sudo make install      # installs to /usr/local/bin/px
+sudo make install      # installs to /usr/local/bin/pw
 sudo make uninstall    # removes it
 ```
 
@@ -70,11 +64,11 @@ yourself.
 ## Run
 
 ```sh
-./px [-h] [-xrvca] [-t seconds]
+./pw [-h] [-xrvca] [-t seconds]
 ```
 
 Same flags/semantics as the X11 version. Left-click to pick, any key to
-cancel. Tunables (`GRID_CELLS`, `CELL_PX`, `CORNER_R`, `SW_W`, `SW_H`) are
+cancel. Tunables (`GRID_CELLS`, `CELL_pw`, `CORNER_R`, `SW_W`, `SW_H`) are
 still compile-time constants near the top of `main.c`.
 
 ## Known rough edges

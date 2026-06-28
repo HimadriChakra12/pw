@@ -20,6 +20,15 @@
 #include <xkbcommon/xkbcommon.h>
 #include <cairo/cairo.h>
 
+#define GRID_CELLS  9
+#define CELL_PX     16
+#define CORNER_R    6
+#define WIN_SIZE    (GRID_CELLS * CELL_PX)
+#define HALF        (GRID_CELLS / 2)
+#define GAP         20
+#define SW_W        155
+#define SW_H        52
+
 #ifndef WLR_LAYER_SHELL_UNSTABLE_V1_CLIENT_PROTOCOL_H
 #define WLR_LAYER_SHELL_UNSTABLE_V1_CLIENT_PROTOCOL_H
 
@@ -646,15 +655,6 @@ WL_PRIVATE const struct wl_interface zwlr_screencopy_frame_v1_interface = {
 	3, zwlr_screencopy_frame_v1_requests,
 	7, zwlr_screencopy_frame_v1_events,
 };
-
-#define GRID_CELLS  9
-#define CELL_PX     16
-#define CORNER_R    6
-#define WIN_SIZE    (GRID_CELLS * CELL_PX)
-#define HALF        (GRID_CELLS / 2)
-#define GAP         20
-#define SW_W        120
-#define SW_H        52
 
 static void render_frame(void);
 static void request_redraw(void);
